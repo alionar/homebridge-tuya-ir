@@ -19,7 +19,7 @@ class APIInvocationHelper {
         log.debug(`Calling endpoint ${endpoint} with payload ${JSON.stringify(body)}`);
         const timestamp = new Date().getTime();
         const accessToken = LoginHelper_1.LoginHelper.Instance(config, log).getAccessToken();
-        const emptyBodyForGet = method === "GET" ? "" : JSON.stringify(body);
+        const emptyBodyForGet = method === "GET" ? "" : (body ? JSON.stringify(body) : "");
         const signedParameters = this.calculateSign(new url_1.URL(endpoint), config, method, timestamp, true, accessToken, emptyBodyForGet);
         const options = {
             url: endpoint,
@@ -71,7 +71,7 @@ class APIInvocationHelper {
         return returnObject;
     }
     static stringToSign(query, url, method, body = "") {
-        const sha256 = crypto_js_1.default.SHA256(body);
+        const sha256 = crypto_js_1.default.SHA256(body || "");
         return { signedUrl: method + "\n" + sha256 + "\n\n" + url + query, url: url + query };
     }
 }
