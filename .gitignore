@@ -1,2 +1,4 @@
 node_modules
 .homebridge
+mise.local.toml
+.DS_Store
