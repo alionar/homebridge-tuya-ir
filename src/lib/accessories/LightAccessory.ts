@@ -2,6 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { BaseAccessory } from './BaseAccessory';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IrCommandQueue } from '../api/IrCommandQueue';
 
 /**
  * Light Accessory
@@ -81,10 +82,12 @@ export class LightAccessory extends BaseAccessory {
     }
 
     private sendLightCommand(command: string, cb) {
-        const commandObj = {"commands":[{"code":command,"value":1}]}
-            
-        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+        const commandObj = {"commands":[{"code":command,"value":1}]};
+        IrCommandQueue.enqueue(this.parentId, this.accessory.context.device.id, command, (done) => {
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
 }

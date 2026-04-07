@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FanAccessory = void 0;
 const BaseAccessory_1 = require("./BaseAccessory");
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IrCommandQueue_1 = require("../api/IrCommandQueue");
 /**
  * Fan Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -137,8 +138,11 @@ class FanAccessory extends BaseAccessory_1.BaseAccessory {
     }
     sendFanCommand(command, cb) {
         const commandObj = { [this.sendCommandKey]: command };
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+        IrCommandQueue_1.IrCommandQueue.enqueue(this.parentId, this.accessory.context.device.id, String(command), (done) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
     getIRCodeFromKey(item, key) {

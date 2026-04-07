@@ -11,6 +11,7 @@ export class TuyaIRConfiguration {
     public apiHost = "";
     public enableStatusPolling = false;
     public statusPollingInterval = 300;
+    public irCommandDelay = 600;
 
     constructor(config: PlatformConfig, index: number) {
         this.tuyaAPIClientId = config.tuyaAPIClientId;
@@ -21,6 +22,7 @@ export class TuyaIRConfiguration {
         this.configuredRemotes = config.smartIR[index].configuredRemotes?.map(v => new Device(v));
         this.enableStatusPolling = config.enableStatusPolling ?? false;
         this.statusPollingInterval = config.statusPollingInterval ?? 300;
+        this.irCommandDelay = config.irCommandDelay ?? 600;
 
         switch (this.deviceRegion) {
             case "sg":

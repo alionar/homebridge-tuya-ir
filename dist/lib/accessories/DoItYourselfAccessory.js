@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoItYourselfAccessory = void 0;
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IrCommandQueue_1 = require("../api/IrCommandQueue");
 const BaseAccessory_1 = require("./BaseAccessory");
 /**
  * Do It Yourself Accessory
@@ -59,9 +60,12 @@ class DoItYourselfAccessory extends BaseAccessory_1.BaseAccessory {
     }
     sendLearningCode(deviceId, remoteId, code, cb) {
         this.log.debug('Sending Learning Code');
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
-            `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`, 'POST', { code }, (body) => {
-            cb(body);
+        IrCommandQueue_1.IrCommandQueue.enqueue(deviceId, remoteId, code, (done) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
+                `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`, 'POST', { code }, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
     fetchLearningCodes(deviceId, remoteId, cb) {

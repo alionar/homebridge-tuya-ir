@@ -2,6 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { BaseAccessory } from './BaseAccessory';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IrCommandQueue } from '../api/IrCommandQueue';
 
 /**
  * Air Conditioner Accessory
@@ -366,17 +367,20 @@ export class AirConditionerAccessory extends BaseAccessory {
       value: value,
     };
     this.log.debug(JSON.stringify(commandObj));
-    APIInvocationHelper.invokeTuyaIrApi(
-      this.log,
-      this.configuration,
-      this.configuration.apiHost +
-        `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`,
-      'POST',
-      commandObj,
-      (body) => {
-        cb(body);
-      },
-    );
+    IrCommandQueue.enqueue(deviceId, remoteId, command, (done) => {
+      APIInvocationHelper.invokeTuyaIrApi(
+        this.log,
+        this.configuration,
+        this.configuration.apiHost +
+          `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`,
+        'POST',
+        commandObj,
+        (body) => {
+          cb(body);
+          done();
+        },
+      );
+    });
   }
 
   getACStatus(deviceId: string, remoteId: string, cb) {

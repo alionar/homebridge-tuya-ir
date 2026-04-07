@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AirConditionerAccessory = void 0;
 const BaseAccessory_1 = require("./BaseAccessory");
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IrCommandQueue_1 = require("../api/IrCommandQueue");
 /**
  * Air Conditioner Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -225,9 +226,12 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
             value: value,
         };
         this.log.debug(JSON.stringify(commandObj));
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
-            `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, 'POST', commandObj, (body) => {
-            cb(body);
+        IrCommandQueue_1.IrCommandQueue.enqueue(deviceId, remoteId, command, (done) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
+                `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, 'POST', commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
     getACStatus(deviceId, remoteId, cb) {

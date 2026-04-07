@@ -10,6 +10,7 @@ export declare class TuyaIRConfiguration {
     apiHost: string;
     enableStatusPolling: boolean;
     statusPollingInterval: number;
+    irCommandDelay: number;
     constructor(config: PlatformConfig, index: number);
 }
 //# sourceMappingURL=TuyaIRConfiguration.d.ts.map

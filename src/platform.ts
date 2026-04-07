@@ -1,5 +1,6 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 import { TuyaIRDiscovery } from './lib/TuyaIRDiscovery';
+import { IrCommandQueue } from './lib/api/IrCommandQueue';
 import { AirConditionerAccessory } from './lib/accessories/AirConditionerAccessory';
 import { FanAccessory } from './lib/accessories/FanAccessory';
 import { GenericAccessory } from './lib/accessories/GenericAccessory';
@@ -37,6 +38,8 @@ export class TuyaIRPlatform implements DynamicPlatformPlugin {
     public readonly api: API,
   ) {
     this.log.debug('Finished initializing platform:', this.config.name);
+    IrCommandQueue.setLogger(this.log);
+    IrCommandQueue.setDelay(this.config.irCommandDelay ?? 600);
 
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -46,6 +49,10 @@ export class TuyaIRPlatform implements DynamicPlatformPlugin {
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
       this.discoverDevices();
+    });
+
+    this.api.on('shutdown', () => {
+      IrCommandQueue.shutdown();
     });
   }
 

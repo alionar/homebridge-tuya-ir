@@ -4,7 +4,7 @@ exports.TuyaIRConfiguration = void 0;
 const Device_1 = require("./Device");
 class TuyaIRConfiguration {
     constructor(config, index) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.tuyaAPIClientId = "";
         this.tuyaAPISecret = "";
         this.deviceRegion = "";
@@ -14,6 +14,7 @@ class TuyaIRConfiguration {
         this.apiHost = "";
         this.enableStatusPolling = false;
         this.statusPollingInterval = 300;
+        this.irCommandDelay = 600;
         this.tuyaAPIClientId = config.tuyaAPIClientId;
         this.tuyaAPISecret = config.tuyaAPISecret;
         this.deviceRegion = config.deviceRegion;
@@ -22,6 +23,7 @@ class TuyaIRConfiguration {
         this.configuredRemotes = (_a = config.smartIR[index].configuredRemotes) === null || _a === void 0 ? void 0 : _a.map(v => new Device_1.Device(v));
         this.enableStatusPolling = (_b = config.enableStatusPolling) !== null && _b !== void 0 ? _b : false;
         this.statusPollingInterval = (_c = config.statusPollingInterval) !== null && _c !== void 0 ? _c : 300;
+        this.irCommandDelay = (_d = config.irCommandDelay) !== null && _d !== void 0 ? _d : 600;
         switch (this.deviceRegion) {
             case "sg":
                 this.apiHost = "https://openapi-sg.iotbing.com";
