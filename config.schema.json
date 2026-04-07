@@ -10,7 +10,7 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "TuyaIR"
+        "default": "TuyaIRLocal"
       },
       "tuyaAPIClientId": {
         "title": "Client ID",
