@@ -385,13 +385,17 @@ export class AirConditionerAccessory extends BaseAccessory {
       if (command === 'temp') newState.temperature = value as number;
       if (command === 'wind') newState.fan = value as number;
 
+      // For non-power commands assume the AC is on — IR codes encode the full
+      // state and these settings are only meaningful while running.
+      const powerForLookup = command === 'power' ? (newState.On ? '1' : '0') : '1';
+
       // HomeKit mode: AUTO=0, HEAT=1, COOL=2 → Tuya: M0=cool, M1=heat, M2=auto
       const HOMEKIT_TO_TUYA_MODE = [2, 1, 0];
       const tuyaMode = HOMEKIT_TO_TUYA_MODE[newState.mode] ?? 2;
 
       const code = ACCodeCache.getACState(
         this.parentId, remoteId,
-        newState.On ? '1' : '0',
+        powerForLookup,
         String(tuyaMode),
         String(newState.temperature),
         String(newState.fan),
@@ -401,7 +405,7 @@ export class AirConditionerAccessory extends BaseAccessory {
         await IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
         return;
       }
-      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (state: power=${newState.On ? 1 : 0} tuyaMode=${tuyaMode} temp=${newState.temperature} fan=${newState.fan}), falling back to cloud`);
+      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (lookup: power=${powerForLookup} tuyaMode=${tuyaMode} temp=${newState.temperature} fan=${newState.fan}), falling back to cloud`);
     }
 
     // Cloud fallback
