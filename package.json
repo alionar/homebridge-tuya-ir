@@ -26,7 +26,7 @@
   },
   "keywords": [
     "homebridge-plugin",
-    "homebridge-tuya-ir"
+    "homebridge-tuya-ir-local"
   ],
   "dependencies": {
     "crypto-js": "^4.0.0",

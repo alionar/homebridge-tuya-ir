@@ -22,7 +22,24 @@ class TuyaIRConfiguration {
         this.irDeviceId = config.smartIR[index].deviceId;
         this.autoFetchRemotesFromServer = config.smartIR[index].autoFetchRemotesFromServer;
         this.configuredRemotes = (_d = config.smartIR[index].configuredRemotes) === null || _d === void 0 ? void 0 : _d.map(v => new Device_1.Device(v));
-        this.apiHost = this.tuyaAPIClientId ? `https://openapi.tuya${this.deviceRegion}.com` : "";
+        if (this.tuyaAPIClientId) {
+            switch (this.deviceRegion) {
+                case "sg":
+                    this.apiHost = "https://openapi-sg.iotbing.com";
+                    break;
+                case "ueaz":
+                    this.apiHost = "https://openapi-ueaz.tuyaus.com";
+                    break;
+                case "weaz":
+                    this.apiHost = "https://openapi-weaz.tuyaeu.com";
+                    break;
+                default:
+                    this.apiHost = `https://openapi.tuya${this.deviceRegion}.com`;
+            }
+        }
+        else {
+            this.apiHost = "";
+        }
         this.localKey = (_e = config.smartIR[index].localKey) !== null && _e !== void 0 ? _e : "";
         this.ip = config.smartIR[index].ip;
         this.version = (_f = config.smartIR[index].version) !== null && _f !== void 0 ? _f : "3.3";
