@@ -12,9 +12,12 @@ export declare class GenericAccessory extends BaseAccessory {
     private service;
     private switchStates;
     private powerCommand;
-    private sendCommandAPIURL;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
-    setOn(value: CharacteristicValue): void;
+    /**
+     * Fetch the power IR code from the cloud at startup for local dispatch.
+     */
+    private prefetchPowerCode;
+    setOn(value: CharacteristicValue): Promise<void>;
     getOn(): CharacteristicValue;
     private sendCommand;
 }

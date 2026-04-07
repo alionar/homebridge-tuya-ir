@@ -10,8 +10,6 @@ export declare class FanAccessory extends BaseAccessory {
     private readonly platform;
     private readonly accessory;
     private service;
-    private sendCommandAPIURL;
-    private sendCommandKey;
     private fanStates;
     private powerCommand;
     private speedCommand;

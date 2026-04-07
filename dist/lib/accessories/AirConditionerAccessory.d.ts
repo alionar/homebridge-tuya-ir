@@ -14,21 +14,27 @@ export declare class AirConditionerAccessory extends BaseAccessory {
     private modeCode;
     private acStates;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
+    /**
+     * Fetch the full AC IR code library from the cloud once at startup.
+     * After this, all runtime commands are dispatched locally via DP 201.
+     */
+    private prefetchACCodes;
     getTemperatureRange(): void;
     /**
-     * Load latest device status.
+     * Poll AC status. Uses local DP query when localKey is configured,
+     * falls back to cloud API otherwise.
      */
-    refreshStatus(): void;
-    setOn(value: CharacteristicValue): void;
+    refreshStatus(): Promise<void>;
+    setOn(value: CharacteristicValue): Promise<void>;
     getOn(): CharacteristicValue;
-    setHeatingCoolingState(value: CharacteristicValue): void;
+    setHeatingCoolingState(value: CharacteristicValue): Promise<void>;
     getHeatingCoolingState(): CharacteristicValue;
     getCoolingThresholdTemperatureCharacteristic(): CharacteristicValue;
-    setCoolingThresholdTemperatureCharacteristic(value: CharacteristicValue): void;
+    setCoolingThresholdTemperatureCharacteristic(value: CharacteristicValue): Promise<void>;
     getRotationSpeedCharacteristic(): CharacteristicValue;
-    setRotationSpeedCharacteristic(value: CharacteristicValue): void;
+    setRotationSpeedCharacteristic(value: CharacteristicValue): Promise<void>;
     getCurrentTemperature(): CharacteristicValue;
-    sendACCommand(deviceId: string, remoteId: string, command: string, value: string | number, cb: any): void;
+    sendACCommand(deviceId: string, remoteId: string, command: string, value: string | number): Promise<void>;
     getACStatus(deviceId: string, remoteId: string, cb: any): void;
 }
 //# sourceMappingURL=AirConditionerAccessory.d.ts.map

@@ -10,7 +10,7 @@ export declare class DoItYourselfAccessory extends BaseAccessory {
     private readonly platform;
     private readonly accessory;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
-    sendLearningCode(deviceId: string, remoteId: string, code: string, cb: any): void;
+    sendLearningCode(deviceId: string, remoteId: string, code: string): Promise<void>;
     fetchLearningCodes(deviceId: string, remoteId: string, cb: any): void;
 }
 //# sourceMappingURL=DoItYourselfAccessory.d.ts.map

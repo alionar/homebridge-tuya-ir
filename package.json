@@ -1,24 +1,20 @@
 {
   "private": false,
-  "displayName": "Homebridge Tuya IR Platform",
-  "name": "homebridge-tuya-ir",
-  "version": "1.2.0",
+  "displayName": "Homebridge Tuya IR Local",
+  "name": "homebridge-tuya-ir-local",
+  "version": "1.0.0",
   "description": "Allows homebridge to control Tuya IR Blaster based devices",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/prasad-edlabadka/homebridge-tuya-ir.git"
+    "url": "git://github.com/alionar/homebridge-tuya-ir.git"
   },
   "bugs": {
-    "url": "https://github.com/prasad-edlabadka/homebridge-tuya-ir/issues"
-  },
-  "funding": {
-    "type": "paypal",
-    "url": "https://paypal.me/prasadedlabadkar"
+    "url": "https://github.com/alionar/homebridge-tuya-ir/issues"
   },
   "engines": {
     "homebridge": "^1.6.0 || ^2.0.0-beta.0",
-    "node": "^18.20.4 || ^20.15.1 || ^22"
+    "node": "^22 || ^24"
   },
   "main": "dist/index.js",
   "scripts": {
@@ -36,17 +32,18 @@
     "crypto-js": "^4.0.0",
     "escape-html": "^1.0.3",
     "http": "^0.0.1-security",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "tuyapi": "^7.7.1"
   },
   "devDependencies": {
-    "@types/node": "^14.14.31",
+    "@types/node": "^22",
     "@typescript-eslint/eslint-plugin": "^5.15.0",
     "@typescript-eslint/parser": "^5.15.0",
     "eslint": "^7.21.0",
-    "homebridge": "^1.9.0",
+    "homebridge": "^1.11.4",
     "nodemon": "^2.0.7",
     "rimraf": "^3.0.2",
     "ts-node": "^9.1.1",
-    "typescript": "^4.2.2"
+    "typescript": "^5.9.3"
   }
 }

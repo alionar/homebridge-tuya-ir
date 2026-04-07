@@ -6,8 +6,8 @@ import { GenericAccessory } from './lib/accessories/GenericAccessory';
 import { DoItYourselfAccessory } from "./lib/accessories/DoItYourselfAccessory";
 import { LightAccessory } from './lib/accessories/LightAccessory';
 
-const PLATFORM_NAME = 'TuyaIR';
-const PLUGIN_NAME = 'homebridge-tuya-ir';
+const PLATFORM_NAME = 'TuyaIRLocal';
+const PLUGIN_NAME = 'homebridge-tuya-ir-local';
 const CLASS_DEF = {
   infrared_ac: AirConditionerAccessory,
   infrared_fan: FanAccessory,
@@ -67,11 +67,18 @@ export class TuyaIRPlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
 
-    //if (!this.config.devices) return this.log.error("No devices configured. Please configure atleast one device.");
-    if (!this.config.tuyaAPIClientId) return this.log.error("Client ID is not configured. Please check your config.json");
-    if (!this.config.tuyaAPISecret) return this.log.error("Client Secret is not configured. Please check your config.json");
-    if (!this.config.deviceRegion) return this.log.error("Region is not configured. Please check your config.json");
-    //if (!this.config.deviceId) return this.log.error("IR Blaster device ID is not configured. Please check your config.json");
+    const needsCloud = this.config.smartIR?.some(ir => ir.autoFetchRemotesFromServer !== false);
+    if (needsCloud) {
+      if (!this.config.tuyaAPIClientId) return this.log.error("Client ID is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+      if (!this.config.tuyaAPISecret) return this.log.error("Client Secret is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+      if (!this.config.deviceRegion) return this.log.error("Region is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+    }
+
+    for (const ir of this.config.smartIR ?? []) {
+      if (!ir.localKey) {
+        this.log.warn(`No localKey configured for device ${ir.deviceId}. Local control will not work for this device.`);
+      }
+    }
 
     this.log.info('Starting discovery...');
     const tuya: TuyaIRDiscovery = new TuyaIRDiscovery(this.log, this.config);

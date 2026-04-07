@@ -2,6 +2,7 @@ import { PlatformAccessory } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
 import { BaseAccessory } from './BaseAccessory';
+import { IRBlasterLocalCommand } from '../local/IRBlasterLocalCommand';
 
 /**
  * Do It Yourself Accessory
@@ -77,23 +78,16 @@ export class DoItYourselfAccessory extends BaseAccessory {
               .onGet(() => {
                 return false;
               })
-              .onSet((value) => {
+              .onSet(async (value) => {
                 if (value) {
-                  this.sendLearningCode(
+                  await this.sendLearningCode(
                     this.accessory.context.device.ir_id,
                     this.accessory.context.device.id,
                     code.code,
-                    (body) => {
-                      if (!body.success) {
-                        this.log.error(
-                          `Failed to fetch learning codes due to error ${body.msg}`,
-                        );
-                      }
-                      service.setCharacteristic(
-                        this.platform.Characteristic.On,
-                        false,
-                      );
-                    },
+                  );
+                  service.setCharacteristic(
+                    this.platform.Characteristic.On,
+                    false,
                   );
                 }
               });
@@ -103,19 +97,31 @@ export class DoItYourselfAccessory extends BaseAccessory {
     );
   }
 
-  sendLearningCode(deviceId: string, remoteId: string, code: string, cb) {
-    this.log.debug('Sending Learning Code');
-    APIInvocationHelper.invokeTuyaIrApi(
-      this.log,
-      this.configuration,
-      this.configuration.apiHost +
-        `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`,
-      'POST',
-      { code },
-      (body) => {
-        cb(body);
-      },
-    );
+  async sendLearningCode(deviceId: string, remoteId: string, code: string): Promise<void> {
+    if (this.configuration.localKey) {
+      this.log.debug(`Sending DIY learning code locally for ${deviceId}/${remoteId}`);
+      await IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
+      return;
+    }
+
+    // Cloud fallback
+    this.log.debug('Sending Learning Code via cloud');
+    await new Promise<void>((resolve) => {
+      APIInvocationHelper.invokeTuyaIrApi(
+        this.log,
+        this.configuration,
+        this.configuration.apiHost +
+          `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`,
+        'POST',
+        { code },
+        (body) => {
+          if (!body.success) {
+            this.log.error(`Failed to send learning code: ${body.msg}`);
+          }
+          resolve();
+        },
+      );
+    });
   }
 
   fetchLearningCodes(deviceId: string, remoteId: string, cb) {

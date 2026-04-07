@@ -10,9 +10,14 @@ export declare class LightAccessory extends BaseAccessory {
     private readonly platform;
     private readonly accessory;
     private service;
-    private sendCommandAPIURL;
     private lightState;
+    private commandCodes;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
+    /**
+     * Fetch IR codes for PowerOn/PowerOff/Brightness+/Brightness- at startup.
+     * After this, all runtime commands are dispatched locally via DP 201.
+     */
+    private prefetchLightCodes;
     private setOn;
     private getOn;
     private getBrightness;

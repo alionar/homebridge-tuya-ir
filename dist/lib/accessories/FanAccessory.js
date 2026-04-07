@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FanAccessory = void 0;
 const BaseAccessory_1 = require("./BaseAccessory");
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IRBlasterLocalCommand_1 = require("../local/IRBlasterLocalCommand");
 /**
  * Fan Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -23,8 +24,6 @@ class FanAccessory extends BaseAccessory_1.BaseAccessory {
         this.powerCommand = 1;
         this.speedCommand = 9367;
         this.swingCommand = 9372;
-        this.sendCommandAPIURL = accessory.context.device.diy ? `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/learning-codes` : `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/raw/command`;
-        this.sendCommandKey = accessory.context.device.diy ? 'code' : 'raw_key';
         (_b = (_a = this.accessory) === null || _a === void 0 ? void 0 : _a.getService(this.platform.Service.AccessoryInformation)) === null || _b === void 0 ? void 0 : _b.setCharacteristic(this.platform.Characteristic.Manufacturer, accessory.context.device.product_name).setCharacteristic(this.platform.Characteristic.Model, 'Infrared Controlled Fan').setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.id);
         this.service = this.accessory.getService(this.platform.Service.Fanv2) || this.accessory.addService(this.platform.Service.Fanv2);
         this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
@@ -49,20 +48,14 @@ class FanAccessory extends BaseAccessory_1.BaseAccessory {
             }
         });
     }
-    setOn(value) {
+    async setOn(value) {
         if (this.fanStates.On != value) {
-            this.sendFanCommand(this.powerCommand, (body) => {
-                if (!body.success) {
-                    this.log.error(`Failed to change Fan status due to error ${body.msg}`);
-                }
-                else {
-                    this.log.info(`${this.accessory.displayName} is now ${value == 0 ? 'Off' : 'On'}`);
-                    this.fanStates.On = value;
-                    if (this.fanStates.On) {
-                        this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 50);
-                    }
-                }
-            });
+            await this.sendFanCommand(this.powerCommand);
+            this.log.info(`${this.accessory.displayName} is now ${value == 0 ? 'Off' : 'On'}`);
+            this.fanStates.On = value;
+            if (this.fanStates.On) {
+                this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 50);
+            }
         }
     }
     getOn() {
@@ -71,31 +64,19 @@ class FanAccessory extends BaseAccessory_1.BaseAccessory {
     getRotationSpeed() {
         return this.fanStates.speed;
     }
-    setRotationSpeed() {
-        this.sendFanCommand(this.speedCommand, (body) => {
-            if (!body.success) {
-                this.log.error(`Failed to change Fan speed due to error ${body.msg}`);
-            }
-            else {
-                this.log.info(`${this.accessory.displayName} speed is updated.`);
-                this.fanStates.speed = 50;
-                this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 50);
-            }
-        });
+    async setRotationSpeed() {
+        await this.sendFanCommand(this.speedCommand);
+        this.log.info(`${this.accessory.displayName} speed is updated.`);
+        this.fanStates.speed = 50;
+        this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 50);
     }
     getSwingMode() {
         return this.fanStates.swing;
     }
-    setSwingMode(value) {
-        this.sendFanCommand(this.swingCommand, (body) => {
-            if (!body.success) {
-                this.log.error(`Failed to change Fan swing due to error ${body.msg}`);
-            }
-            else {
-                this.log.info(`${this.accessory.displayName} swing is updated.`);
-                this.fanStates.swing = value;
-            }
-        });
+    async setSwingMode(value) {
+        await this.sendFanCommand(this.swingCommand);
+        this.log.info(`${this.accessory.displayName} swing is updated.`);
+        this.fanStates.swing = value;
     }
     getFanCommands(irDeviceId, remoteId, isDiy = false, callback) {
         this.log.debug("Getting commands for Fan...");
@@ -135,34 +116,61 @@ class FanAccessory extends BaseAccessory_1.BaseAccessory {
             });
         }
     }
-    sendFanCommand(command, cb) {
-        const commandObj = { [this.sendCommandKey]: command };
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+    async sendFanCommand(command) {
+        const code = String(command);
+        if (this.configuration.localKey) {
+            this.log.debug(`${this.accessory.displayName}: sending fan command locally`);
+            await IRBlasterLocalCommand_1.IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
+            return;
+        }
+        // Cloud fallback
+        const isDiy = this.accessory.context.device.diy;
+        const sendCommandAPIURL = isDiy
+            ? `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${this.accessory.context.device.id}/learning-codes`
+            : `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${this.accessory.context.device.id}/raw/command`;
+        const sendCommandKey = isDiy ? 'code' : 'raw_key';
+        const commandObj = { [sendCommandKey]: command };
+        await new Promise((resolve) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, sendCommandAPIURL, "POST", commandObj, (body) => {
+                if (!body.success) {
+                    this.log.error(`Failed to send fan command via cloud: ${body.msg}`);
+                }
+                resolve();
+            });
         });
     }
     getIRCodeFromKey(item, key) {
         if (item.key_name === key) {
-            return item.key_id || item.key;
+            // Prefer the actual IR code (key field) over numeric key_id for local dispatch
+            return item.key || item.key_id || null;
         }
+        return null;
     }
     getIRCodesFromAPIResponse(apiResponse) {
-        const ret = { power: this.powerCommand, speed: this.speedCommand, swing: this.swingCommand };
+        const ret = {
+            power: this.powerCommand,
+            speed: this.speedCommand,
+            swing: this.swingCommand,
+        };
         for (let i = 0; i < apiResponse.result.length; i++) {
             const codeItem = apiResponse.result[i];
-            ret.power = ret.power || this.getIRCodeFromKey(codeItem, "power");
-            ret.speed = ret.speed || this.getIRCodeFromKey(codeItem, "fan_speed");
-            ret.swing = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
+            ret.power = ret.power || this.getIRCodeFromKey(codeItem, "power") || this.powerCommand;
+            ret.speed = ret.speed || this.getIRCodeFromKey(codeItem, "fan_speed") || this.speedCommand;
+            ret.swing = ret.swing || this.getIRCodeFromKey(codeItem, "swing") || this.swingCommand;
         }
         return ret;
     }
     getStandardIRCodesFromAPIResponse(apiResponse) {
-        const ret = { power: null, speed: null, swing: null };
+        const ret = {
+            power: this.powerCommand,
+            speed: this.speedCommand,
+            swing: this.swingCommand,
+        };
         for (let i = 0; i < apiResponse.result.key_list.length; i++) {
             const codeItem = apiResponse.result.key_list[i];
-            ret.power = ret.power || this.getIRCodeFromKey(codeItem, "power");
-            ret.speed = ret.speed || this.getIRCodeFromKey(codeItem, "fan_speed");
-            ret.swing = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
+            ret.power = ret.power || this.getIRCodeFromKey(codeItem, "power") || this.powerCommand;
+            ret.speed = ret.speed || this.getIRCodeFromKey(codeItem, "fan_speed") || this.speedCommand;
+            ret.swing = ret.swing || this.getIRCodeFromKey(codeItem, "swing") || this.swingCommand;
         }
         return ret;
     }

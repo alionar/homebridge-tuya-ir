@@ -7,8 +7,8 @@ const FanAccessory_1 = require("./lib/accessories/FanAccessory");
 const GenericAccessory_1 = require("./lib/accessories/GenericAccessory");
 const DoItYourselfAccessory_1 = require("./lib/accessories/DoItYourselfAccessory");
 const LightAccessory_1 = require("./lib/accessories/LightAccessory");
-const PLATFORM_NAME = 'TuyaIR';
-const PLUGIN_NAME = 'homebridge-tuya-ir';
+const PLATFORM_NAME = 'TuyaIRLocal';
+const PLUGIN_NAME = 'homebridge-tuya-ir-local';
 const CLASS_DEF = {
     infrared_ac: AirConditionerAccessory_1.AirConditionerAccessory,
     infrared_fan: FanAccessory_1.FanAccessory,
@@ -57,14 +57,21 @@ class TuyaIRPlatform {
      * must not be registered again to prevent "duplicate UUID" errors.
      */
     discoverDevices() {
-        //if (!this.config.devices) return this.log.error("No devices configured. Please configure atleast one device.");
-        if (!this.config.tuyaAPIClientId)
-            return this.log.error("Client ID is not configured. Please check your config.json");
-        if (!this.config.tuyaAPISecret)
-            return this.log.error("Client Secret is not configured. Please check your config.json");
-        if (!this.config.deviceRegion)
-            return this.log.error("Region is not configured. Please check your config.json");
-        //if (!this.config.deviceId) return this.log.error("IR Blaster device ID is not configured. Please check your config.json");
+        var _a, _b;
+        const needsCloud = (_a = this.config.smartIR) === null || _a === void 0 ? void 0 : _a.some(ir => ir.autoFetchRemotesFromServer !== false);
+        if (needsCloud) {
+            if (!this.config.tuyaAPIClientId)
+                return this.log.error("Client ID is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+            if (!this.config.tuyaAPISecret)
+                return this.log.error("Client Secret is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+            if (!this.config.deviceRegion)
+                return this.log.error("Region is not configured but autoFetchRemotesFromServer is enabled. Please check your config.json");
+        }
+        for (const ir of (_b = this.config.smartIR) !== null && _b !== void 0 ? _b : []) {
+            if (!ir.localKey) {
+                this.log.warn(`No localKey configured for device ${ir.deviceId}. Local control will not work for this device.`);
+            }
+        }
         this.log.info('Starting discovery...');
         const tuya = new TuyaIRDiscovery_1.TuyaIRDiscovery(this.log, this.config);
         this.discover(tuya, 0, this.config.smartIR.length);

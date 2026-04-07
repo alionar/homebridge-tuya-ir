@@ -2,6 +2,8 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { BaseAccessory } from './BaseAccessory';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IRBlasterLocalCommand } from '../local/IRBlasterLocalCommand';
+import { ACCodeCache } from '../local/ACCodeCache';
 
 /**
  * Air Conditioner Accessory
@@ -96,11 +98,69 @@ export class AirConditionerAccessory extends BaseAccessory {
       })
       .onGet(this.getRotationSpeedCharacteristic.bind(this))
       .onSet(this.setRotationSpeedCharacteristic.bind(this));
+
+    if (this.configuration.localKey) {
+      this.prefetchACCodes();
+    } else {
+      this.log.warn(`${this.accessory.displayName}: no localKey configured, AC commands will use cloud API`);
+    }
+
     this.refreshStatus();
     this.getTemperatureRange();
   }
 
+  /**
+   * Fetch the full AC IR code library from the cloud once at startup.
+   * After this, all runtime commands are dispatched locally via DP 201.
+   */
+  private prefetchACCodes(): void {
+    const remoteId = this.accessory.context.device.id;
+    if (ACCodeCache.has(this.parentId, remoteId)) {
+      this.log.debug(`${this.accessory.displayName}: AC codes already cached`);
+      return;
+    }
+
+    this.log.debug(`${this.accessory.displayName}: fetching AC IR codes from cloud for local dispatch...`);
+    APIInvocationHelper.invokeTuyaIrApi(
+      this.log,
+      this.configuration,
+      `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${remoteId}/keys`,
+      'GET',
+      {},
+      (keysBody) => {
+        if (!keysBody.success) {
+          this.log.error(`${this.accessory.displayName}: failed to fetch AC remote keys: ${keysBody.msg}. AC commands will use cloud API.`);
+          return;
+        }
+        const { category_id, brand_id, remote_index } = keysBody.result;
+        APIInvocationHelper.invokeTuyaIrApi(
+          this.log,
+          this.configuration,
+          `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/categories/${category_id}/brands/${brand_id}/remotes/${remote_index}/rules`,
+          'GET',
+          {},
+          (rulesBody) => {
+            if (!rulesBody.success) {
+              this.log.error(`${this.accessory.displayName}: failed to fetch AC IR rules: ${rulesBody.msg}. AC commands will use cloud API.`);
+              return;
+            }
+            let count = 0;
+            for (const rule of rulesBody.result ?? []) {
+              const code = rule.key;
+              if (code && typeof code === 'string') {
+                ACCodeCache.set(this.parentId, remoteId, rule.key_name, rule.key_id ?? rule.key_name, code);
+                count++;
+              }
+            }
+            this.log.info(`${this.accessory.displayName}: cached ${count} AC IR codes for local dispatch`);
+          },
+        );
+      },
+    );
+  }
+
   getTemperatureRange() {
+    if (!this.configuration.tuyaAPIClientId) return;
     APIInvocationHelper.invokeTuyaIrApi(
       this.log,
       this.configuration,
@@ -151,10 +211,36 @@ export class AirConditionerAccessory extends BaseAccessory {
       },
     );
   }
+
   /**
-   * Load latest device status.
+   * Poll AC status. Uses local DP query when localKey is configured,
+   * falls back to cloud API otherwise.
    */
-  refreshStatus() {
+  async refreshStatus() {
+    if (this.configuration.localKey) {
+      try {
+        const status = await IRBlasterLocalCommand.queryACStatus(this.configuration, this.log);
+        if (status) {
+          this.log.debug(`${this.accessory.displayName} local status: ${JSON.stringify(status)}`);
+          this.acStates.On = status.power === '1';
+          this.acStates.mode =
+            this.modeCode[status.mode] ??
+            this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
+          this.acStates.temperature = status.temp;
+          this.acStates.fan = status.wind;
+          this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
+          this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState, this.acStates.mode);
+          this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.acStates.temperature);
+          this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.acStates.fan);
+        }
+      } catch (err) {
+        this.log.error(`${this.accessory.displayName}: local status refresh failed: ${(err as Error).message}`);
+      }
+      setTimeout(() => this.refreshStatus(), 30000);
+      return;
+    }
+
+    // Cloud fallback
     this.getACStatus(
       this.parentId,
       this.accessory.context.device.id,
@@ -163,9 +249,7 @@ export class AirConditionerAccessory extends BaseAccessory {
           this.log.error(`Failed to get AC status due to error ${body.msg}`);
         } else {
           this.log.debug(
-            `${this.accessory.displayName} status is ${JSON.stringify(
-              body.result,
-            )}`,
+            `${this.accessory.displayName} status is ${JSON.stringify(body.result)}`,
           );
           this.acStates.On = body.result.power === '1' ? true : false;
           this.acStates.mode =
@@ -173,58 +257,34 @@ export class AirConditionerAccessory extends BaseAccessory {
             this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
           this.acStates.temperature = body.result.temp as number;
           this.acStates.fan = body.result.wind as number;
-          this.service.updateCharacteristic(
-            this.platform.Characteristic.Active,
-            this.acStates.On,
-          );
-          this.service.updateCharacteristic(
-            this.platform.Characteristic.TargetHeaterCoolerState,
-            this.acStates.mode,
-          );
-          this.service.updateCharacteristic(
-            this.platform.Characteristic.CurrentTemperature,
-            this.acStates.temperature,
-          );
-          this.service.updateCharacteristic(
-            this.platform.Characteristic.RotationSpeed,
-            this.acStates.fan,
-          );
+          this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
+          this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState, this.acStates.mode);
+          this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.acStates.temperature);
+          this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.acStates.fan);
         }
-        setTimeout(this.refreshStatus.bind(this), 30000);
+        setTimeout(() => this.refreshStatus(), 30000);
       },
     );
   }
 
-  setOn(value: CharacteristicValue) {
+  async setOn(value: CharacteristicValue) {
     if (this.acStates.On == (value as boolean)) return;
     const command = (value as boolean) ? 1 : 0;
-    this.sendACCommand(
+    await this.sendACCommand(
       this.parentId,
       this.accessory.context.device.id,
       'power',
       command,
-      (body) => {
-        if (!body.success) {
-          this.log.error(
-            `Failed to change status of ${this.accessory.displayName} due to error ${body.msg}`,
-          );
-        } else {
-          this.log.info(
-            `${this.accessory.displayName} is now ${
-              command == 0 ? 'Off' : 'On'
-            }`,
-          );
-          this.acStates.On = value as boolean;
-        }
-      },
     );
+    this.log.info(`${this.accessory.displayName} is now ${command == 0 ? 'Off' : 'On'}`);
+    this.acStates.On = value as boolean;
   }
 
   getOn(): CharacteristicValue {
     return this.acStates.On;
   }
 
-  setHeatingCoolingState(value: CharacteristicValue) {
+  async setHeatingCoolingState(value: CharacteristicValue) {
     const val = value as number;
     let command = 2;
     if (val == this.platform.Characteristic.TargetHeaterCoolerState.COOL)
@@ -232,24 +292,14 @@ export class AirConditionerAccessory extends BaseAccessory {
     if (val == this.platform.Characteristic.TargetHeaterCoolerState.HEAT)
       command = 1;
 
-    this.sendACCommand(
+    await this.sendACCommand(
       this.parentId,
       this.accessory.context.device.id,
       'mode',
       command,
-      (body) => {
-        if (!body.success) {
-          this.log.error(
-            `Failed to change ${this.accessory.displayName} mode due to error ${body.msg}`,
-          );
-        } else {
-          this.log.info(
-            `${this.accessory.displayName} mode is ${this.modeList[command]}`,
-          );
-          this.acStates.mode = val;
-        }
-      },
     );
+    this.log.info(`${this.accessory.displayName} mode is ${this.modeList[command]}`);
+    this.acStates.mode = val;
   }
 
   getHeatingCoolingState(): CharacteristicValue {
@@ -260,93 +310,81 @@ export class AirConditionerAccessory extends BaseAccessory {
     return this.acStates.temperature;
   }
 
-  setCoolingThresholdTemperatureCharacteristic(value: CharacteristicValue) {
+  async setCoolingThresholdTemperatureCharacteristic(value: CharacteristicValue) {
     const command = value as number;
-    this.sendACCommand(
+    await this.sendACCommand(
       this.parentId,
       this.accessory.context.device.id,
       'temp',
       command,
-      (body) => {
-        if (!body.success) {
-          this.log.error(
-            `Failed to change ${this.accessory.displayName} temperature due to error ${body.msg}`,
-          );
-        } else {
-          this.log.info(
-            `${this.accessory.displayName} temperature is set to ${command} degrees.`,
-          );
-          this.acStates.temperature = command;
-          this.service.updateCharacteristic(
-            this.platform.Characteristic.CurrentTemperature,
-            command,
-          );
-        }
-      },
     );
+    this.log.info(`${this.accessory.displayName} temperature is set to ${command} degrees.`);
+    this.acStates.temperature = command;
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, command);
   }
 
   getRotationSpeedCharacteristic(): CharacteristicValue {
     return this.acStates.fan;
   }
 
-  setRotationSpeedCharacteristic(value: CharacteristicValue) {
-    //Change fan speed
+  async setRotationSpeedCharacteristic(value: CharacteristicValue) {
     const command = value as number;
-
-    this.sendACCommand(
+    await this.sendACCommand(
       this.parentId,
       this.accessory.context.device.id,
       'wind',
       command,
-      (body) => {
-        if (!body.success) {
-          this.log.error(
-            `Failed to change ${this.accessory.displayName} fan due to error ${body.msg}`,
-          );
-        } else {
-          this.log.info(
-            `${this.accessory.displayName} Fan is set to ${
-              command == 0 ? 'auto' : command
-            }.`,
-          );
-          this.acStates.fan = command;
-        }
-      },
     );
+    this.log.info(`${this.accessory.displayName} Fan is set to ${command == 0 ? 'auto' : command}.`);
+    this.acStates.fan = command;
   }
 
   getCurrentTemperature(): CharacteristicValue {
     return this.acStates.temperature;
   }
 
-  sendACCommand(
+  async sendACCommand(
     deviceId: string,
     remoteId: string,
     command: string,
     value: string | number,
-    cb,
-  ) {
-    const commandObj = {
-      code: command,
-      value: value,
-    };
+  ): Promise<void> {
+    // Try local dispatch first
+    if (this.configuration.localKey) {
+      const code = ACCodeCache.get(this.parentId, remoteId, command, value);
+      if (code) {
+        this.log.debug(`${this.accessory.displayName}: sending AC command ${command}=${value} locally`);
+        await IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
+        return;
+      }
+      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value}, falling back to cloud`);
+    }
+
+    // Cloud fallback
+    const commandObj = { code: command, value: value };
     this.log.debug(JSON.stringify(commandObj));
-    APIInvocationHelper.invokeTuyaIrApi(
-      this.log,
-      this.configuration,
-      this.configuration.apiHost +
-        `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`,
-      'POST',
-      commandObj,
-      (body) => {
-        cb(body);
-      },
-    );
+    await new Promise<void>((resolve) => {
+      APIInvocationHelper.invokeTuyaIrApi(
+        this.log,
+        this.configuration,
+        this.configuration.apiHost +
+          `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`,
+        'POST',
+        commandObj,
+        (body) => {
+          if (!body.success) {
+            this.log.error(
+              `Failed to send AC command ${command}=${value} via cloud: ${body.msg}`,
+            );
+          }
+          resolve();
+        },
+      );
+    });
   }
 
   getACStatus(deviceId: string, remoteId: string, cb) {
-    this.log.debug('Getting AC Status');
+    this.log.debug('Getting AC Status from cloud');
     APIInvocationHelper.invokeTuyaIrApi(
       this.log,
       this.configuration,

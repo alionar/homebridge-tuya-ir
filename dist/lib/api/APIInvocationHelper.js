@@ -41,6 +41,7 @@ class APIInvocationHelper {
             incomingMsg.on('end', () => {
                 if (incomingMsg.statusCode != 200) {
                     log.error("Api call failed with response code " + incomingMsg.statusCode);
+                    callback({ success: false, msg: `HTTP ${incomingMsg.statusCode}` });
                 }
                 else {
                     let jsonBody;
