@@ -32,10 +32,9 @@ export class LocalDeviceHelper {
   ): Promise<void> {
     const device = await this.ensureConnected(deviceId, ip, localKey, version, log);
     log.debug(`Sending DPs to ${deviceId}: ${JSON.stringify(dps)}`);
-    await withTimeout(
-      device.set({ multiple: true, data: dps }),
-      COMMAND_TIMEOUT_MS,
-    );
+    // IR blasters don't send a status response after a DP 201 send — use
+    // shouldWaitForResponse:false so tuyapi resolves immediately instead of timing out.
+    await device.set({ multiple: true, data: dps, shouldWaitForResponse: false });
   }
 
   static async queryDPs(
