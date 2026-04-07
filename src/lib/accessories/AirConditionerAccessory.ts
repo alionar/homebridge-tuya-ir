@@ -115,7 +115,7 @@ export class AirConditionerAccessory extends BaseAccessory {
    */
   private prefetchACCodes(): void {
     const remoteId = this.accessory.context.device.id;
-    if (ACCodeCache.has(this.parentId, remoteId)) {
+    if (ACCodeCache.hasACStates(this.parentId, remoteId)) {
       this.log.debug(`${this.accessory.displayName}: AC codes already cached`);
       return;
     }
@@ -144,11 +144,23 @@ export class AirConditionerAccessory extends BaseAccessory {
               this.log.error(`${this.accessory.displayName}: failed to fetch AC IR rules: ${rulesBody.msg}. AC commands will use cloud API.`);
               return;
             }
+            // AC rules return full-state rows: { power, mode, temp, wind, key: base64IRCode }
+            const rows: unknown[] = Array.isArray(rulesBody.result)
+              ? rulesBody.result
+              : (rulesBody.result?.list ?? []);
             let count = 0;
-            for (const rule of rulesBody.result ?? []) {
-              const code = rule.key;
+            for (const rule of rows) {
+              const r = rule as Record<string, unknown>;
+              const code = r['key'];
               if (code && typeof code === 'string') {
-                ACCodeCache.set(this.parentId, remoteId, rule.key_name, rule.key_id ?? rule.key_name, code);
+                ACCodeCache.setACState(
+                  this.parentId, remoteId,
+                  String(r['power'] ?? ''),
+                  String(r['mode'] ?? ''),
+                  String(r['temp'] ?? ''),
+                  String(r['wind'] ?? ''),
+                  code,
+                );
                 count++;
               }
             }
@@ -349,15 +361,28 @@ export class AirConditionerAccessory extends BaseAccessory {
     command: string,
     value: string | number,
   ): Promise<void> {
-    // Try local dispatch first
+    // Try local dispatch first using full AC state lookup
     if (this.configuration.localKey) {
-      const code = ACCodeCache.get(this.parentId, remoteId, command, value);
+      // Derive the new full state by applying this command to the current state
+      const newState = { ...this.acStates };
+      if (command === 'power') newState.On = value === 1;
+      if (command === 'mode') newState.mode = value as number;
+      if (command === 'temp') newState.temperature = value as number;
+      if (command === 'wind') newState.fan = value as number;
+
+      const code = ACCodeCache.getACState(
+        this.parentId, remoteId,
+        newState.On ? '1' : '0',
+        String(newState.mode),
+        String(newState.temperature),
+        String(newState.fan),
+      );
       if (code) {
         this.log.debug(`${this.accessory.displayName}: sending AC command ${command}=${value} locally`);
         await IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
         return;
       }
-      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value}, falling back to cloud`);
+      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (state: power=${newState.On ? 1 : 0} mode=${newState.mode} temp=${newState.temperature} wind=${newState.fan}), falling back to cloud`);
     }
 
     // Cloud fallback

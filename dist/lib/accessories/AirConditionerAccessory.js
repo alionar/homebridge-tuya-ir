@@ -78,7 +78,7 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
      */
     prefetchACCodes() {
         const remoteId = this.accessory.context.device.id;
-        if (ACCodeCache_1.ACCodeCache.has(this.parentId, remoteId)) {
+        if (ACCodeCache_1.ACCodeCache.hasACStates(this.parentId, remoteId)) {
             this.log.debug(`${this.accessory.displayName}: AC codes already cached`);
             return;
         }
@@ -90,16 +90,21 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
             }
             const { category_id, brand_id, remote_index } = keysBody.result;
             APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/categories/${category_id}/brands/${brand_id}/remotes/${remote_index}/rules`, 'GET', {}, (rulesBody) => {
-                var _a, _b;
+                var _a, _b, _c, _d, _e, _f;
                 if (!rulesBody.success) {
                     this.log.error(`${this.accessory.displayName}: failed to fetch AC IR rules: ${rulesBody.msg}. AC commands will use cloud API.`);
                     return;
                 }
+                // AC rules return full-state rows: { power, mode, temp, wind, key: base64IRCode }
+                const rows = Array.isArray(rulesBody.result)
+                    ? rulesBody.result
+                    : ((_b = (_a = rulesBody.result) === null || _a === void 0 ? void 0 : _a.list) !== null && _b !== void 0 ? _b : []);
                 let count = 0;
-                for (const rule of (_a = rulesBody.result) !== null && _a !== void 0 ? _a : []) {
-                    const code = rule.key;
+                for (const rule of rows) {
+                    const r = rule;
+                    const code = r['key'];
                     if (code && typeof code === 'string') {
-                        ACCodeCache_1.ACCodeCache.set(this.parentId, remoteId, rule.key_name, (_b = rule.key_id) !== null && _b !== void 0 ? _b : rule.key_name, code);
+                        ACCodeCache_1.ACCodeCache.setACState(this.parentId, remoteId, String((_c = r['power']) !== null && _c !== void 0 ? _c : ''), String((_d = r['mode']) !== null && _d !== void 0 ? _d : ''), String((_e = r['temp']) !== null && _e !== void 0 ? _e : ''), String((_f = r['wind']) !== null && _f !== void 0 ? _f : ''), code);
                         count++;
                     }
                 }
@@ -242,15 +247,25 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
         return this.acStates.temperature;
     }
     async sendACCommand(deviceId, remoteId, command, value) {
-        // Try local dispatch first
+        // Try local dispatch first using full AC state lookup
         if (this.configuration.localKey) {
-            const code = ACCodeCache_1.ACCodeCache.get(this.parentId, remoteId, command, value);
+            // Derive the new full state by applying this command to the current state
+            const newState = { ...this.acStates };
+            if (command === 'power')
+                newState.On = value === 1;
+            if (command === 'mode')
+                newState.mode = value;
+            if (command === 'temp')
+                newState.temperature = value;
+            if (command === 'wind')
+                newState.fan = value;
+            const code = ACCodeCache_1.ACCodeCache.getACState(this.parentId, remoteId, newState.On ? '1' : '0', String(newState.mode), String(newState.temperature), String(newState.fan));
             if (code) {
                 this.log.debug(`${this.accessory.displayName}: sending AC command ${command}=${value} locally`);
                 await IRBlasterLocalCommand_1.IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
                 return;
             }
-            this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value}, falling back to cloud`);
+            this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (state: power=${newState.On ? 1 : 0} mode=${newState.mode} temp=${newState.temperature} wind=${newState.fan}), falling back to cloud`);
         }
         // Cloud fallback
         const commandObj = { code: command, value: value };
