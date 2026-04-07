@@ -144,27 +144,54 @@ export class AirConditionerAccessory extends BaseAccessory {
               this.log.error(`${this.accessory.displayName}: failed to fetch AC IR rules: ${rulesBody.msg}. AC commands will use cloud API.`);
               return;
             }
-            // AC rules return full-state rows: { power, mode, temp, wind, key: base64IRCode }
+            // AC rules return rows: { code: base64IRCode, key: "M{mode}_T{temp}_S{fan}" | "M{mode}_S{fan}" | "PowerOff" | "PowerOn", key_id: 0 }
             const rows: unknown[] = Array.isArray(rulesBody.result)
               ? rulesBody.result
               : (rulesBody.result?.list ?? []);
             let count = 0;
             for (const rule of rows) {
               const r = rule as Record<string, unknown>;
-              const code = r['key'];
-              if (code && typeof code === 'string') {
-                ACCodeCache.setACState(
-                  this.parentId, remoteId,
-                  String(r['power'] ?? ''),
-                  String(r['mode'] ?? ''),
-                  String(r['temp'] ?? ''),
-                  String(r['wind'] ?? ''),
-                  code,
-                );
+              const irCode = r['code'];       // actual base64 IR code
+              const keyStr = r['key'];         // "M0_T16_S0", "M2_S0", "PowerOff", etc.
+              if (!irCode || typeof irCode !== 'string' || !keyStr || typeof keyStr !== 'string') continue;
+
+              if (keyStr === 'PowerOff') {
+                ACCodeCache.setACState(this.parentId, remoteId, '0', '0', '0', '0', irCode);
                 count++;
+              } else {
+                // "M{tuyaMode}_T{temp}_S{fan}" — full-state entry
+                const fullMatch = keyStr.match(/^M(\d+)_T(\d+)_S(\d+)$/);
+                if (fullMatch) {
+                  const [, tuyaMode, temp, fan] = fullMatch;
+                  ACCodeCache.setACState(this.parentId, remoteId, '1', tuyaMode, temp, fan, irCode);
+                  count++;
+                  continue;
+                }
+                // "M{tuyaMode}_S{fan}" — mode with no temperature (e.g. auto/fan-only)
+                const noTempMatch = keyStr.match(/^M(\d+)_S(\d+)$/);
+                if (noTempMatch) {
+                  const [, tuyaMode, fan] = noTempMatch;
+                  ACCodeCache.setACState(this.parentId, remoteId, '1', tuyaMode, 'none', fan, irCode);
+                  count++;
+                }
+                // Skip PowerOn and unrecognised keys
               }
             }
             this.log.info(`${this.accessory.displayName}: cached ${count} AC IR codes for local dispatch`);
+            if (count === 0) {
+              // This remote has no IR codes in Tuya's DB (e.g. a different registration of the same model).
+              // Schedule a retry to copy codes from a sibling AC remote on the same IR blaster.
+              this.log.warn(`${this.accessory.displayName}: rules returned no codes — will attempt to copy from sibling AC in 15s`);
+              setTimeout(() => {
+                const siblingId = ACCodeCache.findPopulatedACRemote(this.parentId, remoteId);
+                if (siblingId) {
+                  const copied = ACCodeCache.copyACCodes(siblingId, remoteId, this.parentId);
+                  this.log.info(`${this.accessory.displayName}: copied ${copied} AC IR codes from sibling remote for local dispatch`);
+                } else {
+                  this.log.warn(`${this.accessory.displayName}: no sibling AC remote found with cached codes, AC commands will use cloud API`);
+                }
+              }, 15000);
+            }
           },
         );
       },
@@ -358,10 +385,14 @@ export class AirConditionerAccessory extends BaseAccessory {
       if (command === 'temp') newState.temperature = value as number;
       if (command === 'wind') newState.fan = value as number;
 
+      // HomeKit mode: AUTO=0, HEAT=1, COOL=2 → Tuya: M0=cool, M1=heat, M2=auto
+      const HOMEKIT_TO_TUYA_MODE = [2, 1, 0];
+      const tuyaMode = HOMEKIT_TO_TUYA_MODE[newState.mode] ?? 2;
+
       const code = ACCodeCache.getACState(
         this.parentId, remoteId,
         newState.On ? '1' : '0',
-        String(newState.mode),
+        String(tuyaMode),
         String(newState.temperature),
         String(newState.fan),
       );
@@ -370,7 +401,7 @@ export class AirConditionerAccessory extends BaseAccessory {
         await IRBlasterLocalCommand.sendRawIRCode(this.configuration, code, this.log);
         return;
       }
-      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (state: power=${newState.On ? 1 : 0} mode=${newState.mode} temp=${newState.temperature} wind=${newState.fan}), falling back to cloud`);
+      this.log.warn(`${this.accessory.displayName}: no cached IR code for ${command}=${value} (state: power=${newState.On ? 1 : 0} tuyaMode=${tuyaMode} temp=${newState.temperature} fan=${newState.fan}), falling back to cloud`);
     }
 
     // Cloud fallback

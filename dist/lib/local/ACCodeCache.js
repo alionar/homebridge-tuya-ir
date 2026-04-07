@@ -31,23 +31,63 @@ class ACCodeCache {
     }
     /**
      * Look up an IR code for the given full AC state.
-     * Falls back to searching with power=0 + any mode/temp/wind if the exact
-     * combination is not found (handles ACs with a single power-off code).
+     * Fallback order:
+     *   1. Exact match (power:mode:temp:wind)
+     *   2. Power-off: any entry with power=0 (handles single power-off codes)
+     *   3. No-temp: mode uses 'none' temp (e.g. auto mode M2_S{fan})
      */
     static getACState(irDeviceId, remoteId, power, mode, temp, wind) {
-        const exact = this.cache.get(`${irDeviceId}:${remoteId}:AC:${power}:${mode}:${temp}:${wind}`);
+        const prefix = `${irDeviceId}:${remoteId}:AC:`;
+        const exact = this.cache.get(`${prefix}${power}:${mode}:${temp}:${wind}`);
         if (exact)
             return exact;
-        // When turning off, many ACs use the same IR code regardless of mode/temp/wind.
-        // Scan for any power=0 entry as a fallback.
         if (power === '0') {
-            const prefix = `${irDeviceId}:${remoteId}:AC:0:`;
             for (const [k, v] of this.cache.entries()) {
-                if (k.startsWith(prefix))
+                if (k.startsWith(`${prefix}0:`))
                     return v;
             }
         }
+        // Fallback for modes that carry no temperature (e.g. auto/fan-only)
+        const noTemp = this.cache.get(`${prefix}${power}:${mode}:none:${wind}`);
+        if (noTemp)
+            return noTemp;
         return undefined;
+    }
+    /**
+     * Find any AC remote under the given IR blaster that already has cached codes,
+     * excluding the specified remote.
+     */
+    static findPopulatedACRemote(irDeviceId, excludeRemoteId) {
+        const excludePrefix = `${irDeviceId}:${excludeRemoteId}:AC:`;
+        const parentPrefix = `${irDeviceId}:`;
+        for (const key of this.cache.keys()) {
+            if (!key.startsWith(parentPrefix))
+                continue;
+            if (key.startsWith(excludePrefix))
+                continue;
+            const after = key.slice(parentPrefix.length);
+            const colonIdx = after.indexOf(':');
+            if (colonIdx > 0 && after.slice(colonIdx + 1).startsWith('AC:')) {
+                return after.slice(0, colonIdx);
+            }
+        }
+        return undefined;
+    }
+    /**
+     * Copy all AC cache entries from srcRemoteId to dstRemoteId.
+     * Returns the number of entries copied.
+     */
+    static copyACCodes(srcRemoteId, dstRemoteId, irDeviceId) {
+        const srcPrefix = `${irDeviceId}:${srcRemoteId}:AC:`;
+        const dstPrefix = `${irDeviceId}:${dstRemoteId}:AC:`;
+        let count = 0;
+        for (const [key, value] of this.cache.entries()) {
+            if (key.startsWith(srcPrefix)) {
+                this.cache.set(`${dstPrefix}${key.slice(srcPrefix.length)}`, value);
+                count++;
+            }
+        }
+        return count;
     }
     /** Returns true if any AC state codes have been cached for this remote. */
     static hasACStates(irDeviceId, remoteId) {
