@@ -230,24 +230,12 @@ export class AirConditionerAccessory extends BaseAccessory {
    */
   async refreshStatus() {
     if (this.configuration.localKey) {
-      try {
-        const status = await IRBlasterLocalCommand.queryACStatus(this.configuration, this.log);
-        if (status) {
-          this.log.debug(`${this.accessory.displayName} local status: ${JSON.stringify(status)}`);
-          this.acStates.On = status.power === '1';
-          this.acStates.mode =
-            this.modeCode[status.mode] ??
-            this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
-          this.acStates.temperature = status.temp;
-          this.acStates.fan = status.wind;
-          this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
-          this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState, this.acStates.mode);
-          this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.acStates.temperature);
-          this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.acStates.fan);
-        }
-      } catch (err) {
-        this.log.error(`${this.accessory.displayName}: local status refresh failed: ${(err as Error).message}`);
-      }
+      // IR blasters are one-way — they cannot report the AC's state.
+      // Push the current in-memory state to HomeKit so the UI stays consistent.
+      this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
+      this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState, this.acStates.mode);
+      this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.acStates.temperature);
+      this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.acStates.fan);
       setTimeout(() => this.refreshStatus(), 30000);
       return;
     }
