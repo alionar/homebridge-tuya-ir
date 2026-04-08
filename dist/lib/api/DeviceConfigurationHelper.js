@@ -32,6 +32,12 @@ class DeviceConfigurationHelper extends BaseHelper_1.BaseHelper {
     }
     manualFetch(cb) {
         const devs = [];
+        // Check if configuredRemotes exists and has items
+        if (!this.config.configuredRemotes || this.config.configuredRemotes.length === 0) {
+            this.log.error("No configured remotes found. Please add remotes manually to your config or enable auto-discovery when API quota is available.");
+            cb(devs); // Return empty array
+            return;
+        }
         for (let i = 0; i < this.config.configuredRemotes.length; i++) {
             const dev = this.config.configuredRemotes[i];
             this.fetchRemoteDetails(this.config.irDeviceId, dev.id, (device) => {

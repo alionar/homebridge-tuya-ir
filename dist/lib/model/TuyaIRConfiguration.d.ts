@@ -8,6 +8,9 @@ export declare class TuyaIRConfiguration {
     autoFetchRemotesFromServer: boolean;
     configuredRemotes: Device[];
     apiHost: string;
+    enableStatusPolling: boolean;
+    statusPollingInterval: number;
+    irCommandDelay: number;
     constructor(config: PlatformConfig, index: number);
 }
 //# sourceMappingURL=TuyaIRConfiguration.d.ts.map

@@ -2,6 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { BaseAccessory } from './BaseAccessory';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IrCommandQueue } from '../api/IrCommandQueue';
 
 /**
  * Fan Accessory
@@ -152,8 +153,11 @@ export class FanAccessory extends BaseAccessory {
 
     private sendFanCommand(command: string | number, cb) {
         const commandObj = { [this.sendCommandKey]: command };
-        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+        IrCommandQueue.enqueue(this.parentId, this.accessory.context.device.id, String(command), (done) => {
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
 

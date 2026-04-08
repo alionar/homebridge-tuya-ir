@@ -1,6 +1,7 @@
 import { PlatformAccessory } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IrCommandQueue } from '../api/IrCommandQueue';
 import { BaseAccessory } from './BaseAccessory';
 
 /**
@@ -105,17 +106,20 @@ export class DoItYourselfAccessory extends BaseAccessory {
 
   sendLearningCode(deviceId: string, remoteId: string, code: string, cb) {
     this.log.debug('Sending Learning Code');
-    APIInvocationHelper.invokeTuyaIrApi(
-      this.log,
-      this.configuration,
-      this.configuration.apiHost +
-        `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`,
-      'POST',
-      { code },
-      (body) => {
-        cb(body);
-      },
-    );
+    IrCommandQueue.enqueue(deviceId, remoteId, code, (done) => {
+      APIInvocationHelper.invokeTuyaIrApi(
+        this.log,
+        this.configuration,
+        this.configuration.apiHost +
+          `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/learning-codes`,
+        'POST',
+        { code },
+        (body) => {
+          cb(body);
+          done();
+        },
+      );
+    });
   }
 
   fetchLearningCodes(deviceId: string, remoteId: string, cb) {

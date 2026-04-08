@@ -12,6 +12,7 @@ export declare class AirConditionerAccessory extends BaseAccessory {
     private service;
     private modeList;
     private modeCode;
+    private pollingTimeout?;
     private acStates;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
     getTemperatureRange(): void;
@@ -19,6 +20,10 @@ export declare class AirConditionerAccessory extends BaseAccessory {
      * Load latest device status.
      */
     refreshStatus(): void;
+    /**
+     * Stop polling and cleanup resources
+     */
+    stopPolling(): void;
     setOn(value: CharacteristicValue): void;
     getOn(): CharacteristicValue;
     setHeatingCoolingState(value: CharacteristicValue): void;

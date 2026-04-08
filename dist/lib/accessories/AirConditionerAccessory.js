@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AirConditionerAccessory = void 0;
 const BaseAccessory_1 = require("./BaseAccessory");
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IrCommandQueue_1 = require("../api/IrCommandQueue");
 /**
  * Air Conditioner Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -61,7 +62,16 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
         })
             .onGet(this.getRotationSpeedCharacteristic.bind(this))
             .onSet(this.setRotationSpeedCharacteristic.bind(this));
-        this.refreshStatus();
+        // Start status polling if enabled
+        if (this.configuration.enableStatusPolling) {
+            // Validate interval (minimum 30 seconds, no maximum)
+            const interval = Math.max(30, this.configuration.statusPollingInterval);
+            this.log.info(`${this.accessory.displayName}: Status polling enabled with ${interval}s interval (WARNING: This uses API quota)`);
+            this.refreshStatus();
+        }
+        else {
+            this.log.info(`${this.accessory.displayName}: Status polling disabled - AC status will only update on manual interactions`);
+        }
         this.getTemperatureRange();
     }
     getTemperatureRange() {
@@ -121,8 +131,22 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
                 this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.acStates.temperature);
                 this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.acStates.fan);
             }
-            setTimeout(this.refreshStatus.bind(this), 30000);
+            // Schedule next poll only if polling is still enabled
+            if (this.configuration.enableStatusPolling) {
+                const interval = Math.max(30, this.configuration.statusPollingInterval);
+                this.pollingTimeout = setTimeout(this.refreshStatus.bind(this), interval * 1000);
+            }
         });
+    }
+    /**
+     * Stop polling and cleanup resources
+     */
+    stopPolling() {
+        if (this.pollingTimeout) {
+            clearTimeout(this.pollingTimeout);
+            this.pollingTimeout = undefined;
+            this.log.debug(`${this.accessory.displayName}: Stopped status polling`);
+        }
     }
     setOn(value) {
         if (this.acStates.On == value)
@@ -202,9 +226,12 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
             value: value,
         };
         this.log.debug(JSON.stringify(commandObj));
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
-            `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, 'POST', commandObj, (body) => {
-            cb(body);
+        IrCommandQueue_1.IrCommandQueue.enqueue(deviceId, remoteId, command, (done) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost +
+                `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, 'POST', commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
     getACStatus(deviceId, remoteId, cb) {

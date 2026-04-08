@@ -18,8 +18,8 @@ export class APIInvocationHelper {
         log.debug(`Calling endpoint ${endpoint} with payload ${JSON.stringify(body)}`);
         const timestamp = new Date().getTime();
         const accessToken = LoginHelper.Instance(config, log).getAccessToken();
-        const emptyBodyForGet = method === "GET"?"":JSON.stringify(body);
-        
+        const emptyBodyForGet = method === "GET" ? "" : (body ? JSON.stringify(body) : "");
+
         const signedParameters = this.calculateSign(new URL(endpoint), config, method, timestamp, true, accessToken, emptyBodyForGet);
         const options = {
             url: endpoint,
@@ -43,6 +43,7 @@ export class APIInvocationHelper {
             incomingMsg.on('end', () => {
                 if (incomingMsg.statusCode != 200) {
                     log.error("Api call failed with response code " + incomingMsg.statusCode);
+                    callback({ success: false, msg: `API call failed with HTTP ${incomingMsg.statusCode}` });
                 } else {
                     let jsonBody;
                     try {
@@ -76,7 +77,7 @@ export class APIInvocationHelper {
     }
 
     private static stringToSign(query, url, method, body = "") {
-        const sha256 = CryptoJS.SHA256(body);
+        const sha256 = CryptoJS.SHA256(body || "");
         return { signedUrl: method + "\n" + sha256 + "\n\n" + url + query, url: url + query };
     }
 

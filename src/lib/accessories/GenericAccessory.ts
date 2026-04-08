@@ -1,6 +1,7 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { IrCommandQueue } from '../api/IrCommandQueue';
 import { BaseAccessory } from './BaseAccessory';
 
 /**
@@ -57,8 +58,11 @@ export class GenericAccessory extends BaseAccessory {
 
     private sendCommand(command: string | number, cb) {
         const commandObj = { 'raw_key': command };
-        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+        IrCommandQueue.enqueue(this.parentId, this.accessory.context.device.id, String(command), (done) => {
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
 }

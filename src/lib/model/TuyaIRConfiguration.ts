@@ -9,6 +9,9 @@ export class TuyaIRConfiguration {
     public autoFetchRemotesFromServer = true;
     public configuredRemotes: Device[] = [];
     public apiHost = "";
+    public enableStatusPolling = false;
+    public statusPollingInterval = 300;
+    public irCommandDelay = 600;
 
     constructor(config: PlatformConfig, index: number) {
         this.tuyaAPIClientId = config.tuyaAPIClientId;
@@ -17,6 +20,9 @@ export class TuyaIRConfiguration {
         this.irDeviceId = config.smartIR[index].deviceId;
         this.autoFetchRemotesFromServer = config.smartIR[index].autoFetchRemotesFromServer;
         this.configuredRemotes = config.smartIR[index].configuredRemotes?.map(v => new Device(v));
+        this.enableStatusPolling = config.enableStatusPolling ?? false;
+        this.statusPollingInterval = config.statusPollingInterval ?? 300;
+        this.irCommandDelay = config.irCommandDelay ?? 600;
 
         switch (this.deviceRegion) {
             case "sg":

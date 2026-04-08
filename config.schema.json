@@ -76,6 +76,29 @@
           }
         ]
       },
+      "enableStatusPolling": {
+        "title": "Enable AC Status Polling",
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Enable automatic status polling for Air Conditioner accessories. WARNING: This will consume your Tuya API quota. Disable to save API calls (status will only update on manual interactions)."
+      },
+      "statusPollingInterval": {
+        "title": "AC Status Polling Interval (seconds)",
+        "type": "number",
+        "required": false,
+        "default": 300,
+        "minimum": 30,
+        "description": "How often to poll AC status in seconds. Minimum: 30 seconds. Lower values use more API quota. Recommended: 300+ seconds for trial accounts, 60-120 for paid accounts. Only applies if polling is enabled."
+      },
+      "irCommandDelay": {
+        "title": "IR Command Delay (milliseconds)",
+        "type": "number",
+        "required": false,
+        "default": 600,
+        "minimum": 200,
+        "description": "Delay between consecutive IR commands in milliseconds. Prevents IR signal overlap when automations trigger multiple devices. Increase if devices miss commands, decrease for faster response."
+      },
       "smartIR": {
         "title": "List of Smart IR Devices",
         "type": "array",

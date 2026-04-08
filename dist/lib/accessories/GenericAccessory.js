@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GenericAccessory = void 0;
 const APIInvocationHelper_1 = require("../api/APIInvocationHelper");
+const IrCommandQueue_1 = require("../api/IrCommandQueue");
 const BaseAccessory_1 = require("./BaseAccessory");
 /**
  * Generic Accessory
@@ -45,8 +46,11 @@ class GenericAccessory extends BaseAccessory_1.BaseAccessory {
     }
     sendCommand(command, cb) {
         const commandObj = { 'raw_key': command };
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
-            cb(body);
+        IrCommandQueue_1.IrCommandQueue.enqueue(this.parentId, this.accessory.context.device.id, String(command), (done) => {
+            APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+                cb(body);
+                done();
+            });
         });
     }
 }

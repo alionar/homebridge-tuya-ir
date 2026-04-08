@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TuyaIRPlatform = void 0;
 const TuyaIRDiscovery_1 = require("./lib/TuyaIRDiscovery");
+const IrCommandQueue_1 = require("./lib/api/IrCommandQueue");
 const AirConditionerAccessory_1 = require("./lib/accessories/AirConditionerAccessory");
 const FanAccessory_1 = require("./lib/accessories/FanAccessory");
 const GenericAccessory_1 = require("./lib/accessories/GenericAccessory");
@@ -22,6 +23,7 @@ const CLASS_DEF = {
  */
 class TuyaIRPlatform {
     constructor(log, config, api) {
+        var _a;
         this.log = log;
         this.config = config;
         this.api = api;
@@ -33,6 +35,8 @@ class TuyaIRPlatform {
         this.cachedAccessories = new Map();
         this.foundAccessories = [];
         this.log.debug('Finished initializing platform:', this.config.name);
+        IrCommandQueue_1.IrCommandQueue.setLogger(this.log);
+        IrCommandQueue_1.IrCommandQueue.setDelay((_a = this.config.irCommandDelay) !== null && _a !== void 0 ? _a : 600);
         // When this event is fired it means Homebridge has restored all cached accessories from disk.
         // Dynamic Platform plugins should only register new accessories after this event was fired,
         // in order to ensure they weren't added to homebridge already. This event can also be used
@@ -40,6 +44,9 @@ class TuyaIRPlatform {
         this.api.on('didFinishLaunching', () => {
             log.debug('Executed didFinishLaunching callback');
             this.discoverDevices();
+        });
+        this.api.on('shutdown', () => {
+            IrCommandQueue_1.IrCommandQueue.shutdown();
         });
     }
     /**
